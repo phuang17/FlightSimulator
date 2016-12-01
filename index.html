@@ -1,0 +1,338 @@
+<!DOCTYPE HTML> 
+<html lang="en"> 
+<head>
+<title>MP2 by phuang17</title>
+<meta charset="utf-8">
+
+<!-- All srcipts -->
+<script type="text/javascript" src="gl-matrix-min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+<script type="text/javascript" src="gauge.min.js"></script>
+<script type="text/javascript" src="nouislider.min.js"></script>
+<script type="text/javascript" src="startup.js"></script>
+<script type="text/javascript" src="view.js"></script>
+<script type="text/javascript" src="terrain.js"></script>
+<script type="text/javascript" src="airplane.js"></script>
+<script type="text/javascript" src="misc.js"></script>
+<script type="text/javascript" src="interface.js"></script>
+<script type="text/javascript" src="physics.js"></script>
+<script type="text/javascript" src="webgl-debug.js"></script>
+<link rel="stylesheet" type="text/css" href="nouislider.min.css">
+
+</head>
+<body onload="startup();" style="height: 600px;">
+
+  <!-- Instructions -->
+  <div id="instructions" onclick="document.getElementById('instructions').style.display = 'none';" style="position: absolute; width: 100%; height: 1200px; background-color: rgba(50, 50, 50, 0.8); z-index: 200; display: block;">
+    <div style="margin: auto; margin-top: 50px; padding: 20px; width: 80%; background-color: rgba(255,255,255,1.0);">
+      <h3>Instructions: <small>(Click anywhere to close this page)</small></h3>
+      <ul>
+        <li><p>Goal: Fly over the mountains and land on the runway on the other side.</p></li>
+        <li>Operations: (The keys inside parenthesis are for the left-handed.)
+          <ul>
+            <li><p>Use the mouse on the <b><i>thrust</i></b> slider to control thrust force (moving forward).<br>
+                   (Thrust can also be controlled with keys <b><i>X (L)</i></b> and <b><i>Z (K)</i></b>)<p></li>
+            <li><p>Press <b><i>Up-arrow (W)</i></b> and <b><i>Down-arrow (S)</i></b> to control <i>Pitch</i>. It only works when the speed is sufficiently fast to overcome gravity.</p></li>
+            <li><p>Press <b><i>Left-arrow (A)</i></b> and <b><i>Right-arrow (D)</i></b> to control <i>Roll</i>. It only works in the air. When the plane is on the ground, <i>Yaw</i> (Direction) is changed instead.</p></li>
+            <li><p>Press <b><i>C (J)</i></b> or click on the <b><i>Toggle Reverse</i></b> button to enable reverse thrust (used to decelerate after landing).</p></li>
+            <li><p>Press <b><i>R</i></b> to restart.</p></li>
+          </ul>
+        </li>
+        <li>Useful hints:
+          <ul>
+            <li><p>At takeoff:</p>
+              <ol>
+                <li><p>Use full thrust (100%). Hold "Up-arrow (W)" key until the plane finally leaves the ground.</p></li>
+                <li><p>Control the Pitch to be about +20 deg. Climb to height at about 5000 ft.</p></li>
+                <li><p>Make a big U-turn by adjusting Roll, and you'll see the beautiful mountains.</p></li>
+              </ol>
+            </li>
+            <li><p>In the air:</p>
+              <ol>
+                <li><p>Reduce the thrust such that the velocity is around 200 knots. (This is the steady state.)</p></li>
+                <li><p>Adjust Pitch to get to desired Height. Be aware not to hit the mountains.</p></li>
+                <li><p>Right after you pass the mountains, start decreasing hieght and speed to prepare for landing.</p></li>
+              </ol>
+            </li>
+            <li><p>Landing:</p>
+              <ol>
+                <li><p>Make a big U-turn again. Aim the runway from afar.</p></li>
+                <li><p>Decrease height by keeping Pitch at about -10 deg.</p></li>
+                <li><p>When the height is close to zero, control Pitch at around 0 deg carefully so that you don't crash into the ocean. If you find that you cannot lift the pitch, that means your airspeed is too slow. (140-160 knots are good values.)</p></li>
+                <li><p>If you touch the gorund too hard or with large pitch or roll, you will crash.</p></li>
+              </ol>
+            </li>
+            <li><p>After touchdown:</p>
+              <ol>
+                <li><p>Make the thrust -100% to decelerate.</p></li>
+                <li><p>Control direction so that you don't crash into the mountains.</p></li>
+                <li><p>It's fine if you don't land exactly on the runway. You can cruise to runway after deceleration.</p></li>
+                <li><p>The winning condition is such that you stop on the runway.</p></li>
+              </ol>
+            </li>
+          </ul>
+        </li>
+      </ul>
+      <h4><i>Finally, practice makes perfect!</i></h4>
+    </div>
+  </div>
+
+  <!-- Canvas --> 
+  <div style="width: 520px; display: inline-block; vertical-align: top;">
+    <canvas id="myGLCanvas" width="500" height="500"></canvas>
+  </div>
+
+  <!-- Interfaces -->
+  <div style="display: inline-block; vertical-align: top;">
+
+    <h2>Welcome to Po-Han Huang's flight simulator!</h2>
+
+    <!-- Obstacle options -->
+    <div>
+      Obstacles: 
+      <form action="" style="display: inline-block; margin-right: 20px;">
+        <input type="radio" name="obstacle" value="" onclick="setObstacleLevel(0);this.blur();" checked="checked"> None
+        <input type="radio" name="obstacle" value="" onclick="setObstacleLevel(1);this.blur();"> Static
+        <input type="radio" name="obstacle" value="" onclick="setObstacleLevel(2);this.blur();"> Moving
+      </form>
+      <a href="javascript:void(0);" onclick="document.getElementById('instructions').style.display = 'block';">Click here for useful instructions!</a>
+    </div>
+
+    <!-- Message board -->
+    <div><p>Status: <span id="msgDOM"> </span></p></div>
+    
+    <!-- All other interfaces -->
+    <div class="interfaceContainer">
+      <div class="interfaceDiv" style="width: 100px; border: 1px solid red; padding: 5px">
+        <h4>Thrust</h4>
+        <div id="thrustSlider" style="height:200px; margin: auto; margin-top: 20px; margin-bottom: 30px;"></div>
+        <p id="thrustSliderValue"> </p>
+        <button onclick="reverse=!reverse; this.style.borderStyle = (this.style.borderStyle!=='inset' ? 'inset' : 'outset'); " style="border-style: outset;" id="reverseButton">Toggle reverse thrust (used after landing)</button>
+      </div>
+      <div class="interfaceDiv" style="margin-top: 5px; width: 70px;">
+        <h4>Height</h4>
+        <div id="heightSlider" style="height:200px; margin: auto; margin-top: 20px; margin-bottom: 30px;"></div>
+        <p id="heightSliderValue"> </p>
+      </div>
+      <div class="interfaceDiv" style="margin-top: 5px; width: 70px;">
+        <h4>Pitch</h4>
+        <div id="pitchSlider" style="height:200px; margin: auto; margin-top: 20px; margin-bottom: 30px;"></div>
+        <p id="pitchSliderValue"> </p>
+      </div>
+      <div style="display: inline-block; margin-top: 5px;">
+        <div class="interfaceDiv" style="width:240px;">
+          <h4>Roll</h4>
+          <div id="rollSlider" style="width:220px; margin: auto; margin-top: 35px; margin-bottom: 30px; "></div>
+          <p id="rollSliderValue"> </p>
+        </div>
+        <div class="interfaceDiv">
+          <h4>Horizontal Velocity</h4>
+          <canvas id="velocityGaugeCanvas" width="120" height="80"></canvas>
+          <p id="velocityGaugeValue"> </p>
+        </div>
+        <br>
+        <div class="interfaceDiv" style="margin-top: 5px; width:240px;">
+          <h4>Position and Orientation</h4>
+          <div style="position: relative; margin-left: 20px; width: 200px; height: 200px; border: 1px dashed gray; text-align: left; background-color: #c7ffc6;" id="positionDOM">
+          <!-- North Direction icon by Icons8 -->
+          <img id="orientationCompass" src="https://maxcdn.icons8.com/Color/PNG/96/Maps/north_direction-96.png" title="North Direction" width="24" style="position: absolute; z-index: 100;">
+          <div style="position: absolute; width: 2px; height: 20px; background-color: brown; left: 99px; top: 180px"></div>
+          <div style="position: absolute; width: 2px; height: 20px; background-color: orange; left: 99px; top: 0px"></div>
+          </div>
+        </div>
+        <div class="interfaceDiv" style="margin-top: 5px;">
+          <h4>Fuel</h4>
+          <canvas id="fuelGaugeCanvas" width="120" height="80"></canvas>
+          <p id="fuelGaugeValue"> </p>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Shader program source codes (not displayed) -->
+  <div id="shader_codes" style="display:none;">
+
+    <!-- Terrain vertex shader -->
+    <!-- Gouraud shading with Phong reflection model -->
+    <div id="terrainVertexShaderDOM">
+
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexColor;
+    attribute vec3 aVertexNormal;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+
+    uniform vec3 uViewOrigin;
+    uniform vec3 uLightDirection;
+    uniform vec3 uAmbientLight;
+    uniform vec3 uDiffuseLight;
+    uniform vec3 uSpecularLight;
+
+    const float shininess = 12.0;     
+
+    varying vec4 vColor;
+
+    void main(void) {
+      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+
+      vec3 normalizedLightDirection = normalize(uLightDirection);
+      vec3 vectorReflection = normalize( reflect(-normalizedLightDirection, aVertexNormal) );
+      vec3 vectorView = normalize( uViewOrigin - aVertexPosition );      
+
+      float diffuseLightWeighting = max( dot(aVertexNormal, normalizedLightDirection), 0.0 );
+      float specularLightWeighting = pow( max( dot(vectorReflection, vectorView), 0.0), shininess );
+
+      vColor= vec4( ( uAmbientLight * aVertexColor)
+                  + ((uDiffuseLight * aVertexColor) * diffuseLightWeighting)
+                  + ( uSpecularLight * specularLightWeighting),
+                  1.0 );   
+    }
+
+    </div>
+    <!-- Terrain fragment shader -->
+    <div id="terrainFragmentShaderDOM">
+
+    precision mediump float;
+
+    varying vec4 vColor;
+
+    void main(void) {
+      gl_FragColor = vColor;
+    }
+
+    </div>
+
+    <!-- Airplane vertex shader -->
+    <!-- Phong shading with Phong reflection model -->
+    <div id="airplaneVertexShaderDOM">
+
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexColor;
+    attribute vec3 aVertexNormal;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+    uniform mat4 uModelMatrix;
+
+    varying vec3 vWorldPosition;
+    varying vec3 vWorldNormal;
+    varying vec3 vVertexColor;
+
+    void main(void) {
+      vec4 worldPosition = uModelMatrix * vec4(aVertexPosition, 1.0);
+      vWorldPosition = vec3(worldPosition);
+      vWorldNormal = normalize(mat3(uModelMatrix) * aVertexNormal);
+      vVertexColor = aVertexColor;
+      
+      gl_Position = uPMatrix * uMVMatrix * worldPosition;
+           
+    }
+
+    </div>
+    <!-- Airplane fragment shader -->
+    <div id="airplaneFragmentShaderDOM">
+
+    precision mediump float;
+
+    const float shininess = 50.0;
+
+    uniform vec3 uViewOrigin;
+    uniform vec3 uLightDirection;
+    uniform vec3 uAmbientLight;
+    uniform vec3 uDiffuseLight;
+    uniform vec3 uSpecularLight;   
+    
+    varying vec3 vWorldPosition;
+    varying vec3 vWorldNormal;
+    varying vec3 vVertexColor;
+
+    void main(void) {
+
+      vec3 worldPosition = vWorldPosition;
+      vec3 worldNormal = normalize(vWorldNormal);
+
+      vec3 normalizedLightDirection = normalize(uLightDirection);
+      vec3 vectorReflection = normalize( reflect(-normalizedLightDirection, worldNormal) );
+      vec3 vectorView = normalize( uViewOrigin - worldPosition );      
+
+      float diffuseLightWeighting = max( dot(worldNormal, normalizedLightDirection), 0.0 );
+      float specularLightWeighting = pow( max( dot(vectorReflection, vectorView), 0.0), shininess );
+
+      gl_FragColor = vec4( ( uAmbientLight * vVertexColor)
+                  + ((uDiffuseLight * vVertexColor) * diffuseLightWeighting)
+                  + ( uSpecularLight * specularLightWeighting),
+                  1.0 ); 
+    }
+
+    </div>
+
+    <!-- Misc vertex shader -->
+    <!-- Gouraud shading with Phong reflection model (no specular part) -->
+    <div id="miscVertexShaderDOM">
+
+    attribute vec3 aVertexPosition;
+    attribute vec3 aVertexColor;
+    attribute vec3 aVertexNormal;
+
+    uniform mat4 uPMatrix;
+    uniform mat4 uMVMatrix;
+
+    uniform vec3 uViewOrigin;
+    uniform vec3 uLightDirection;
+    uniform vec3 uAmbientLight;
+    uniform vec3 uDiffuseLight;
+    uniform vec3 uSpecularLight;   
+
+    varying vec4 vColor;
+
+    void main(void) {
+      gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+
+      vec3 normalizedLightDirection = normalize(uLightDirection);
+      vec3 vectorReflection = normalize( reflect(-normalizedLightDirection, aVertexNormal) );
+      vec3 vectorView = normalize( uViewOrigin - aVertexPosition );      
+
+      float diffuseLightWeighting = max( dot(aVertexNormal, normalizedLightDirection), 0.0 );
+
+      vColor= vec4( ( uAmbientLight * aVertexColor)
+                  + ((uDiffuseLight * aVertexColor) * diffuseLightWeighting),
+                  1.0 ); 
+      
+    }
+
+    </div>
+    <!-- Misc fragment shader -->
+    <div id="miscFragmentShaderDOM">
+
+    precision mediump float;
+
+    varying vec4 vColor;
+
+    void main(void) {
+      gl_FragColor = vColor;
+    }
+
+    </div>
+
+  </div>
+
+  <style type="text/css">
+
+.interfaceDiv {
+  display: inline-block;
+  position: relative;
+  text-align: center;
+  vertical-align: top;
+}
+
+.interfaceDiv > * {
+  margin: 0px;
+}
+
+  </style>
+
+</body>
+
+</html>
